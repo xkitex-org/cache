@@ -16,8 +16,9 @@ import (
 
 // settings 保存一次启动合并后的具名缓存配置，不读取环境变量。
 type settings struct {
-	Default string                    `yaml:"default"`
-	Sources map[string]sourceSettings `yaml:"sources"`
+	Default   string                    `yaml:"default"`
+	KeyPrefix string                    `yaml:"key_prefix"`
+	Sources   map[string]sourceSettings `yaml:"sources"`
 }
 
 // sourceSettings 描述一个单节点 Redis/Valkey 数据源及其独立连接池。

@@ -13,9 +13,13 @@ import (
 // 不提供 Close、Options、AddHook 等连接池管理能力。
 type Handle struct {
 	redis.Cmdable
-	manager *Manager
-	client  *redis.Client
+	manager   *Manager
+	client    *redis.Client
+	keyPrefix string
 }
+
+// Key 拼接应用配置的前缀和业务键，分隔符由配置中的前缀决定。
+func (h *Handle) Key(key string) string { return h.keyPrefix + key }
 
 // WithDataSource 创建独立的具名数据源句柄，不修改默认值或当前句柄。
 func (h *Handle) WithDataSource(name string) (*Handle, error) {

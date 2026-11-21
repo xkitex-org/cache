@@ -88,7 +88,7 @@ func (m *Manager) Cache() *Handle {
 // handle 在持有管理器锁时创建具名句柄，不暴露连接池关闭方法。
 func (m *Manager) handle(name string) *Handle {
 	client := m.clients[name]
-	return &Handle{Cmdable: client, client: client, manager: m}
+	return &Handle{Cmdable: client, client: client, manager: m, keyPrefix: m.cfg.KeyPrefix}
 }
 
 // ReadinessChecks 返回每个数据源的独立 Ping，不启动定时器或其他后台检查。

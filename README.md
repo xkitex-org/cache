@@ -1,6 +1,6 @@
 # cache：Redis / Valkey 多数据源
 
-独立模块 `go.chaoxizhongzhi.com/xkitex/cache`，基于 go-redis v9.22.0。当前正式版本为 `v0.0.1`。每个具名数据源对应一个单节点和独立连接池，`type` 支持 `redis`、`valkey`，均通过兼容的 Redis 协议连接。
+独立模块 `go.chaoxizhongzhi.com/xkitex/cache`，基于 go-redis v9.22.0。当前正式版本为 `v0.0.2`。每个具名数据源对应一个单节点和独立连接池，`type` 支持 `redis`、`valkey`，均通过兼容的 Redis 协议连接。
 
 ## 显式接入
 
@@ -29,6 +29,7 @@ core 的无参数入口绑定当前进程唯一的一套应用缓存。业务在
 ```yaml
 cache:
   default: primary
+  # key_prefix: "myapp:"  # 可省略，默认空字符串
   sources:
     primary:
       type: valkey
@@ -66,6 +67,15 @@ if err != nil {
     return err
 }
 err = session.Set(ctx, "session:token", "会话", time.Hour).Err()
+```
+
+`cache.key_prefix` 是所有具名数据源共用的业务键前缀，默认空字符串。`Handle.Key(key)` 直接拼接前缀，所需分隔符应写入配置，例如使用 `myapp:`。设置后应在读写、删除、管道及 Lua 的 `KEYS` 中统一用 `Key()` 构造键。go-redis 命令接收的是最终键名，已有键不会迁移。
+
+```go
+cache := x.Cache()
+key := cache.Key("product:1")
+err := cache.Set(ctx, key, "商品", time.Minute).Err()
+// Lua 使用 []string{key} 传入 KEYS。
 ```
 
 命令明确接收业务 ctx。未知名称返回错误，不修改默认数据源，也不回退其他数据源。缺失键保持 SDK 的 `redis.Nil`：

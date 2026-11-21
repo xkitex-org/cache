@@ -46,7 +46,11 @@ func TestIndependentSourcesAndNativeCommands(t *testing.T) {
 	}
 	ctx := context.Background()
 	h := m.Cache()
-	if err := h.Set(ctx, "product:1", "商品", time.Minute).Err(); err != nil {
+	key := h.Key("product:1")
+	if key != "product:1" {
+		t.Fatalf("default prefix changed existing key: %q", key)
+	}
+	if err := h.Set(ctx, key, "商品", time.Minute).Err(); err != nil {
 		t.Fatal(err)
 	}
 	value, err := h.Get(ctx, "product:1").Result()
@@ -321,5 +325,45 @@ func TestStrictSingleShotConfiguration(t *testing.T) {
 	defer m.Close()
 	if err := m.Start(context.Background()); err == nil {
 		t.Fatal("duplicate start accepted")
+	}
+}
+
+func TestConfiguredKeyPrefixIsSharedAcrossSources(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	m := New()
+	defer m.Close()
+	body := fmt.Sprintf(`default: primary
+key_prefix: "test-app:"
+sources:
+  primary: {type: redis, address: %q}
+  secondary: {type: valkey, address: %q, db: 1}
+`, redisServer.Addr(), redisServer.Addr())
+	if err := m.ConfigureCache([]byte(body)); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	primary := m.Cache()
+	secondary, err := primary.WithDataSource("secondary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for db, handle := range []*Handle{primary, secondary} {
+		key := handle.Key("item:{42}")
+		_, err := handle.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, key, "value", time.Minute)
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := handle.Eval(ctx, "return redis.call('GET', KEYS[1])", []string{key}).Text(); err != nil || got != "value" {
+			t.Fatalf("could not read prefixed key in DB %d: %q, %v", db, got, err)
+		}
+		if !redisServer.DB(db).Exists("test-app:item:{42}") || redisServer.DB(db).Exists("item:{42}") {
+			t.Fatalf("unexpected keys in DB %d: %v", db, redisServer.DB(db).Keys())
+		}
 	}
 }
